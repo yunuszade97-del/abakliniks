@@ -33,6 +33,19 @@ export function initTelegram(): void {
   }
 }
 
+export function openExternalLink(url: string): boolean {
+  try {
+    const wa = getWebApp();
+    if (wa?.initData) {
+      wa.openLink(url);
+      return true;
+    }
+  } catch {
+    // fallback: обычный браузер
+  }
+  return false;
+}
+
 export interface TelegramTheme {
   bgColor: string;
   textColor: string;

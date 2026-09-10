@@ -1,11 +1,27 @@
 'use client';
 
-import { use, useEffect } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { areaAItems, getHistoricalScores, getChildById } from '@/lib/seed';
 import { getCompletedAssessment, useHasMounted } from '@/lib/storage';
-import { showBackButton } from '@/lib/telegram';
+import { isTelegram, openExternalLink, showBackButton } from '@/lib/telegram';
 import { useToast } from '@/components/Toast';
+
+// Разбор ?today=<base64(json)> из URL — источник сегодняшней колонки,
+// когда завершённого среза нет в localStorage (пришли из Telegram по ссылке).
+function parseTodayParam(search: string): { date: string; scores: Record<string, number> } | null {
+  try {
+    const raw = new URLSearchParams(search).get('today');
+    if (!raw) return null;
+    const parsed = JSON.parse(atob(decodeURIComponent(raw))) as { date?: unknown; scores?: unknown };
+    if (typeof parsed.date !== 'string' || typeof parsed.scores !== 'object' || parsed.scores === null) {
+      return null;
+    }
+    return { date: parsed.date, scores: parsed.scores as Record<string, number> };
+  } catch {
+    return null;
+  }
+}
 
 const SCORE_COLORS: Record<number, { bg: string; text: string }> = {
   0: { bg: 'var(--score-0)', text: 'var(--score-0-text)' },
@@ -25,6 +41,7 @@ export default function MatrixPage({
   const { showToast } = useToast();
   const child = getChildById(childId);
   const mounted = useHasMounted();
+  const [showExportPanel, setShowExportPanel] = useState(false);
 
   useEffect(() => {
     const cleanup = showBackButton(() => router.push(`/children/${childId}`));
@@ -44,8 +61,9 @@ export default function MatrixPage({
 
   const historicalScores = getHistoricalScores(childId);
   const completed = getCompletedAssessment(childId);
-  const todayScores = completed?.scores || null;
-  const todayDate = completed?.date || 'сегодня';
+  const urlToday = completed ? null : parseTodayParam(window.location.search);
+  const todayScores = completed?.scores || urlToday?.scores || null;
+  const todayDate = completed?.date || urlToday?.date || 'сегодня';
 
   // Все даты-колонки
   const dates = [...historicalScores.map((h) => h.date), todayDate];
@@ -70,6 +88,10 @@ export default function MatrixPage({
   }
 
   const handleExportExcel = async () => {
+    if (isTelegram()) {
+      setShowExportPanel(true);
+      return;
+    }
     showToast('Формирование Excel...');
     try {
       const { exportExcel } = await import('@/lib/export-excel');
@@ -82,6 +104,10 @@ export default function MatrixPage({
   };
 
   const handleExportPdf = async () => {
+    if (isTelegram()) {
+      setShowExportPanel(true);
+      return;
+    }
     showToast('Формирование PDF...');
     try {
       const { exportPdf } = await import('@/lib/export-pdf');
@@ -91,6 +117,16 @@ export default function MatrixPage({
       console.error(err);
       showToast('Ошибка при создании PDF');
     }
+  };
+
+  const handleOpenInBrowser = () => {
+    let url = `${window.location.origin}/children/${childId}/matrix`;
+    if (todayScores) {
+      const payload = JSON.stringify({ date: todayDate, scores: todayScores });
+      url += `?today=${encodeURIComponent(btoa(payload))}`;
+    }
+    openExternalLink(url);
+    setShowExportPanel(false);
   };
 
   return (
@@ -219,6 +255,28 @@ export default function MatrixPage({
                 <div className="text-lg font-bold" style={{ color: '#E65100' }}>↓ {declined}</div>
                 <div className="text-xs" style={{ color: '#F57C00' }}>снизилось</div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Панель «нельзя скачать внутри Telegram» */}
+      {showExportPanel && (
+        <div className="px-4 mt-4 animate-fade-in">
+          <div className="card">
+            <div className="text-sm font-semibold mb-1" style={{ color: 'var(--tg-text)' }}>
+              Файл не скачается внутри Telegram
+            </div>
+            <div className="text-xs mb-3" style={{ color: 'var(--tg-hint)' }}>
+              Telegram не сохраняет файлы внутри приложения. Откройте матрицу в браузере — оттуда Excel и PDF скачиваются как обычно.
+            </div>
+            <div className="space-y-2">
+              <button className="btn-primary" onClick={handleOpenInBrowser}>
+                Открыть в браузере
+              </button>
+              <button className="btn-secondary" onClick={() => setShowExportPanel(false)}>
+                Отмена
+              </button>
             </div>
           </div>
         </div>

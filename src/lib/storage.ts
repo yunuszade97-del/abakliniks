@@ -147,6 +147,7 @@ export function resetAll(): void {
     }
   }
   keysToRemove.forEach((key) => localStorage.removeItem(key));
+  Object.keys(assessmentListeners).forEach((childId) => notifyAssessmentChange(childId));
 }
 
 // --- Форматирование ---

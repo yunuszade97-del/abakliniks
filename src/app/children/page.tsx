@@ -1,21 +1,41 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { children as childrenData } from '@/lib/seed';
 import { ProgressRing } from '@/components/ProgressRing';
 import { hideBackButton } from '@/lib/telegram';
 import { useToast } from '@/components/Toast';
-import { getAssessment } from '@/lib/storage';
+import { getAssessment, resetAll, useHasMounted } from '@/lib/storage';
 
 export default function ChildrenListPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
+  const hasMounted = useHasMounted();
+  const [resetArmed, setResetArmed] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     hideBackButton();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, []);
+
+  const handleResetClick = () => {
+    if (resetArmed) {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      resetAll();
+      router.replace('/');
+      return;
+    }
+    setResetArmed(true);
+    resetTimerRef.current = setTimeout(() => setResetArmed(false), 4000);
+  };
 
   const filtered = childrenData.filter((child) => {
     const q = search.toLowerCase();
@@ -56,7 +76,7 @@ export default function ChildrenListPage() {
       <div className="px-4 pb-6 space-y-3">
         {filtered.map((child, i) => {
           const initials = child.firstName[0] + child.lastInitial[0];
-          const inProgress = getAssessment(child.id);
+          const inProgress = hasMounted ? getAssessment(child.id) : null;
           const ageText = child.ageMonths > 0
             ? `${child.ageYears} г. ${child.ageMonths} мес.`
             : `${child.ageYears} лет`;
@@ -131,12 +151,25 @@ export default function ChildrenListPage() {
       </div>
 
       {/* Кнопка «Добавить ребёнка» */}
-      <div className="px-4 pb-6">
+      <div className="px-4 pb-6 space-y-3">
         <button
           className="btn-secondary"
           onClick={() => showToast('В демо недоступно')}
         >
           + Добавить ребёнка
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => router.push('/dashboard')}
+        >
+          Панель руководителя
+        </button>
+        <button
+          className="w-full text-center text-xs"
+          style={{ color: resetArmed ? '#E65100' : 'var(--tg-hint)' }}
+          onClick={handleResetClick}
+        >
+          {resetArmed ? 'Нажмите ещё раз — данные сотрутся' : 'Сбросить демо-данные'}
         </button>
       </div>
     </div>

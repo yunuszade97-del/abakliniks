@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { areaAItems, getHistoricalScores } from '@/lib/seed';
 import {
   useAssessment, saveAssessment, deleteAssessment,
-  saveCompletedAssessment, formatTime, formatShortDate,
+  saveCompletedAssessment, formatTime, formatShortDate, useHasMounted,
   type AssessmentData,
 } from '@/lib/storage';
 import { showBackButton, hapticImpact, hapticNotification, isTelegram, showMainButton, hideMainButton } from '@/lib/telegram';
@@ -24,6 +24,7 @@ export default function AssessmentPage({
   const { id: childId } = use(params);
   const router = useRouter();
   const assessment = useAssessment(childId);
+  const hasMounted = useHasMounted();
   const [criteriaOpen, setCriteriaOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const mainBtnCleanupRef = useRef<(() => void) | null>(null);
@@ -418,7 +419,7 @@ export default function AssessmentPage({
       )}
 
       {/* Навигация — HTML-фоллбэк (видна если не Telegram) */}
-      {!isTelegram() && (
+      {hasMounted && !isTelegram() && (
         <div className="px-4 mt-4 flex gap-3">
           <button
             className="btn-secondary flex-1"
